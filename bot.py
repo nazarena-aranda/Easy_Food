@@ -10,12 +10,19 @@ load_dotenv()
 telegram_token = os.getenv("TELEGRAM_TOKEN")
 
 # Conexión a la base de datos
-db = mysql.connector.connect(
-    host=os.getenv("DB_HOST"),
-    user=os.getenv("DB_USER"),
-    password=os.getenv("DB_PASSWORD"),
-    database=os.getenv("DB_NAME")
-)
+try:
+    db = mysql.connector.connect(
+        host=os.getenv("DB_HOST"),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        database=os.getenv("DB_NAME")
+    )
+    db_connected = True
+    print("✅ Conectado a la base de datos MySQL")
+except Exception as e:
+    db_connected = False
+    print(f"⚠️ No se pudo conectar a la base de datos: {e}")
+    print("El bot funcionará sin buscar en la base de datos")
 
 usuarios = {}
 
@@ -28,8 +35,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "no_gusta": [],
         "direccion": "",
         "barrio": "",
-        "ciudad": "",
-        "pais": ""
+        "ciudad": ""
     }
     await update.message.reply_text("Hola! Soy Easy Food Bot, ¿Cómo te llamás?")
 
@@ -75,11 +81,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif user["estado"] == "esperando_ciudad":
         user["ciudad"] = texto
-        user["estado"] = "esperando_pais"
-        await update.message.reply_text("¿En qué país estás?")
-
-    elif user["estado"] == "esperando_pais":
-        user["pais"] = texto
         user["estado"] = "esperando_pregunta_comida"
         await update.message.reply_text("¡Gracias! ¿Qué te gustaría comer ahora?")
 
@@ -88,27 +89,39 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{user['name']} es alérgico/a a {', '.join(user['alergias']) or 'nada'}, "
             f"no le gusta {', '.join(user['no_gusta']) or 'nada'}."
         )
-        ubicacion = f"{user['direccion']}, {user['barrio']}, {user['ciudad']}, {user['pais']}"
+        ubicacion = f"{user['direccion']}, {user['barrio']}, {user['ciudad']}"
 
-        # Buscar lugares en MySQL por ciudad
-        cursor = db.cursor(dictionary=True)
-        query = "SELECT nombre, direccion FROM lugares WHERE ciudad = %s LIMIT 1"
-        cursor.execute(query, (user["ciudad"],))
-        lugar = cursor.fetchone()
-        cursor.close()
+        respuesta = f"{preferencias} Está en {ubicacion} y quiere comer {texto}."
 
-        if lugar:
-            respuesta = (
-                f"{preferencias} Está en {ubicacion} y tiene hambre. "
-                f"Un lugar recomendado cerca es: {lugar['nombre']}, ubicado en {lugar['direccion']}."
-            )
+        # Buscar lugares en MySQL por ciudad solo si está conectado
+        if db_connected:
+            try:
+                cursor = db.cursor(dictionary=True)
+                query = "SELECT name, address FROM restaurants WHERE city = %s LIMIT 1"
+                cursor.execute(query, (user["ciudad"],))
+                lugar = cursor.fetchone()
+                cursor.close()
+
+                if lugar:
+                    respuesta += f"\n\n📍 Un lugar recomendado cerca es: {lugar['name']}, ubicado en {lugar['address']}."
+                else:
+                    respuesta += f"\n\n📍 No encontramos restaurantes en la base de datos para {user['ciudad']}."
+            except Exception as e:
+                respuesta += f"\n\n⚠️ No pude buscar en la base de datos: {e}"
         else:
-            respuesta = (
-                f"{preferencias} Está en {ubicacion}, pero no encontramos lugares en la base de datos para esa ciudad."
-            )
+            respuesta += f"\n\n📍 No tengo acceso a la base de datos de lugares en este momento."
 
         # Sugerencia de comida con Gemini
-        respuesta += "\n\n" + responder_gemini(f"{preferencias} Vive en {ubicacion} y quiere comer {texto}. Recomendale una comida.")
+        restricciones = f"Alergias: {', '.join(user['alergias']) or 'ninguna'}. No le gusta: {', '.join(user['no_gusta']) or 'nada'}."
+        
+        # Crear un restaurante ficticio para Gemini
+        restaurante_ficticio = {
+            "nombre": "Restaurante Local",
+            "ciudad": user["ciudad"],
+            "platos": "Variedad de platos locales, pastas, carnes, pescados, ensaladas y postres"
+        }
+        
+        respuesta += "\n\n🍽️ " + responder_gemini(texto, restricciones, restaurante_ficticio)
 
         await update.message.reply_text(respuesta)
 
