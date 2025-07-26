@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: Easy Food
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/easyfood
+    username: ${dbuser}
+    password: ${dbpass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    generate-ddl: true
+    show-sql: true
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
