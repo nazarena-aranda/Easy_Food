@@ -4,6 +4,7 @@ import mysql.connector
 from gemini_api import responder_gemini
 from dotenv import load_dotenv
 import os
+import requests
 
 load_dotenv()
 
@@ -22,7 +23,6 @@ try:
 except Exception as e:
     db_connected = False
     print(f"No se pudo conectar a la base de datos: {e}")
-    print("El bot funcionará sin buscar en la base de datos")
 
 usuarios = {}
 
@@ -93,6 +93,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         respuesta = f"{preferencias} Está en {ubicacion} y quiere comer {texto}."
 
+        # 🔁 Enviar datos al backend Java
+        
+        # Generar número de teléfono único basado en el chat_id
+        telefono = 100000000 + abs(chat_id) % 900000000  # Número entre 100000000 y 999999999
+        datos_usuario = {
+            "name": user["name"],
+            "telephoneNumber": telefono,
+            "address": user["direccion"],
+            "allergies": user["alergias"],
+            "dislikes": user["no_gusta"]
+        }
+
+        try:
+            response = requests.post("http://localhost:8080/person", json=datos_usuario)
+            if response.status_code == 201:
+                respuesta += ""
+            else:
+                respuesta += f"\nError al enviar los datos al backend (código {response.status_code})."
+        except Exception as e:
+            respuesta += f"\nNo se pudo conectar al backend: {e}"
+
         # Buscar lugares en MySQL por ciudad solo si está conectado
         if db_connected:
             try:
@@ -107,21 +128,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     respuesta += f"\n\n📍 No encontramos restaurantes en la base de datos para {user['ciudad']}."
             except Exception as e:
-                respuesta += f"\n\n⚠️ No pude buscar en la base de datos: {e}"
+                respuesta += f"\n\nNo pude buscar en la base de datos: {e}"
         else:
             respuesta += f"\n\n📍 No tengo acceso a la base de datos de lugares en este momento."
 
         # Sugerencia de comida con Gemini
         restricciones = f"Alergias: {', '.join(user['alergias']) or 'ninguna'}. No le gusta: {', '.join(user['no_gusta']) or 'nada'}."
-        
-        # Crear un restaurante ficticio para Gemini
         restaurante_ficticio = {
             "nombre": "Restaurante Local",
             "ciudad": user["ciudad"],
             "platos": "Variedad de platos locales, pastas, carnes, pescados, ensaladas y postres"
         }
-        
-        respuesta += "\n\n🍽️ " + responder_gemini(texto, restricciones, restaurante_ficticio)
+        respuesta += "\n\n" + responder_gemini(texto, restricciones, restaurante_ficticio)
 
         await update.message.reply_text(respuesta)
 

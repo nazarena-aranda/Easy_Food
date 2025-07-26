@@ -18,6 +18,7 @@ public class PersonService {
         Person person = new Person();
         person.setName(dto.name());
         person.setTelephoneNumber(dto.telephoneNumber());
+        person.setAddress(dto.address());
         person.setAllergies(dto.allergies());
         person.setDislikes(dto.dislikes());
 
