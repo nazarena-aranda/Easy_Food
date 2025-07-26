@@ -18,10 +18,10 @@ try:
         database=os.getenv("DB_NAME")
     )
     db_connected = True
-    print("✅ Conectado a la base de datos MySQL")
+    print("Conectado a la base de datos MySQL")
 except Exception as e:
     db_connected = False
-    print(f"⚠️ No se pudo conectar a la base de datos: {e}")
+    print(f"No se pudo conectar a la base de datos: {e}")
     print("El bot funcionará sin buscar en la base de datos")
 
 usuarios = {}
