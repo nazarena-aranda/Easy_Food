@@ -1,18 +1,17 @@
-
-import google.generativeai as genai
 import os
 from dotenv import load_dotenv
+import google.generativeai as genai
 
 load_dotenv()
-api_key = os.getenv("GEMINI_API_KEY") 
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-genai.configure(api_key=api_key)
+def responder_gemini(preferencia, restricciones, restaurante):
+    prompt = f"""
+    Un usuario quiere comer {preferencia}. Encontramos el restaurante "{restaurante['nombre']}" en {restaurante['ciudad']}.
+    Este es su menú: {restaurante['platos']}.
+    El usuario tiene estas restricciones: {restricciones}.
+    ¿Qué plato le recomendás y por qué?
+    """
 
-model = genai.GenerativeModel("gemini-pro")
-
-def responder_gemini(mensaje):
-    try:
-        respuesta = model.generate_content(mensaje)
-        return respuesta.text
-    except Exception as e:
-        return f"Ocurrió un error con Gemini: {str(e)}"
+    response = genai.GenerativeModel("gemini-pro").generate_content(prompt)
+    return response.text
